@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Historica — Age of Industry</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1008; --parchment: #f5edd6; --parchment-dark: #e8d9b5; --parchment-deeper: #d4c090;
+    --sepia: #8b5e3c; --sepia-light: #c49a6c; --crimson: #8b1a1a; --gold: #c9920a;
+    --gold-light: #e8b84b; --shadow: rgba(26,16,8,0.25); --correct: #2d5a2d; --wrong: #8b1a1a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Crimson Pro', serif; background: var(--parchment); color: var(--ink); min-height: 100vh; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); }
+  
+  .screen { display: none; min-height: 100vh; padding: 20px; flex-direction: column; align-items: center; justify-content: center; }
+  .screen.active { display: flex; }
+  .panel { background: var(--parchment); border: 1px solid var(--parchment-deeper); border-radius: 4px; padding: 2rem; box-shadow: 0 4px 24px var(--shadow); position: relative; max-width: 520px; width: 100%; text-align: center; }
+  
+  .btn { font-family: 'Special Elite', monospace; padding: 1rem; border: none; cursor: pointer; text-transform: uppercase; width: 100%; margin-bottom: 0.8rem; transition: 0.2s; }
+  .btn-primary { background: var(--ink); color: var(--parchment); box-shadow: 3px 3px 0 var(--sepia); }
+  .btn-secondary { background: transparent; color: var(--ink); border: 1.5px solid var(--parchment-deeper); }
+  
+  /* Character Grid */
+  .char-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 1.5rem 0; }
+  .char-card { border: 2px solid transparent; padding: 10px; cursor: pointer; border-radius: 4px; background: var(--parchment-dark); transition: 0.2s; }
+  .char-card.selected { border-color: var(--gold); background: var(--parchment-deeper); transform: scale(1.05); }
+  .char-emoji { font-size: 2rem; display: block; }
+  
+  /* Waiting Overlay */
+  .waiting-overlay { position: fixed; inset: 0; background: rgba(26,16,8,0.9); color: white; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+  .waiting-overlay.active { display: flex; }
+
+  .player-list { list-style: none; margin: 1.5rem 0; width: 100%; text-align: left; }
+  .player-list li { padding: 12px; border-bottom: 1px solid var(--parchment-dark); display: flex; justify-content: space-between; align-items: center; }
+  
+  .game-header { background: var(--ink); color: var(--parchment); width: 100%; padding: 1rem; display: flex; justify-content: space-between; border-bottom: 3px solid var(--gold); position: fixed; top:0; z-index: 5; }
+  .timer-bar { height: 8px; background: var(--gold); width: 100%; transition: width 1s linear; position: fixed; top: 55px; }
+  
+  .answer-btn { width: 100%; padding: 1.2rem; margin-bottom: 10px; border: 1.5px solid var(--parchment-deeper); background: var(--parchment); cursor: pointer; text-align: left; font-size: 1.1rem; font-family: 'Crimson Pro', serif; }
+  .answer-btn.correct { background: #d4edda !important; border-color: var(--correct) !important; }
+  .answer-btn.wrong { background: #f8d7da !important; border-color: var(--wrong) !important; }
+</style>
+</head>
+<body>
+
+<div id="wait-overlay" class="waiting-overlay">
+  <h2 style="font-family:'Playfair Display'; font-size: 2.5rem;">Answer Received</h2>
+  <p style="font-family:'Special Elite'; margin-top: 10px; color: var(--gold-light);">Waiting for other players to finish...</p>
+</div>
+
+<div id="home-screen" class="screen active">
+  <div class="panel">
+    <h1 style="font-family:'Playfair Display'; font-size: 3.5rem;">Historica</h1>
+    <button class="btn btn-primary" onclick="showScreen('host-setup-screen')">Host Game</button>
+    <button class="btn btn-secondary" onclick="showScreen('join-screen')">Join Game</button>
+  </div>
+</div>
+
+<div id="host-setup-screen" class="screen">
+  <div class="panel">
+    <h2>Host Settings</h2>
+    <input type="text" id="host-name-input" placeholder="Your Name" style="width:100%; padding:10px; margin: 15px 0;">
+    
+    <label style="display:block; text-align:left; font-family:'Special Elite'; font-size:0.8rem;">Time Limit (Seconds)</label>
+    <input type="number" id="time-limit-input" value="15" min="5" max="60" style="width:100%; padding:10px; margin-bottom:20px;">
+    
+    <button class="btn btn-primary" onclick="createRoom()">Create Room</button>
+  </div>
+</div>
+
+<div id="join-screen" class="screen">
+  <div class="panel">
+    <h2>Join Game</h2>
+    <input type="text" id="join-name-input" placeholder="Your Name" style="width:100%; padding:10px; margin: 10px 0;">
+    <input type="text" id="join-code-input" placeholder="Room Code" style="width:100%; padding:10px; margin-bottom: 10px; text-transform:uppercase;">
+    
+    <p style="font-family:'Special Elite'; font-size:0.7rem;">Choose Your Persona</p>
+    <div class="char-grid">
+      <div class="char-card" onclick="selectChar(this, '🎩')"><span class="char-emoji">🎩</span></div>
+      <div class="char-card" onclick="selectChar(this, '💡')"><span class="char-emoji">💡</span></div>
+      <div class="char-card" onclick="selectChar(this, '👑')"><span class="char-emoji">👑</span></div>
+      <div class="char-card" onclick="selectChar(this, '🧪')"><span class="char-emoji">🧪</span></div>
+      <div class="char-card" onclick="selectChar(this, '🎨')"><span class="char-emoji">🎨</span></div>
+      <div class="char-card" onclick="selectChar(this, '✈️')"><span class="char-emoji">✈️</span></div>
+    </div>
+    <button class="btn btn-primary" onclick="joinRoom()">Join</button>
+  </div>
+</div>
+
+<div id="lobby-screen" class="screen">
+  <div class="panel">
+    <p>ROOM CODE</p>
+    <h1 id="display-room-code" style="letter-spacing:5px; color:var(--gold); font-size:3rem;">----</h1>
+    <ul id="player-list" class="player-list"></ul>
+    <button id="start-btn" class="btn btn-primary" style="display:none;" onclick="startGame()">Commence</button>
+    <p id="wait-msg">Waiting for host...</p>
+  </div>
+</div>
+
+<div id="game-screen" class="screen">
+  <div class="game-header">
+    <div id="q-count-display">Q 1/10</div>
+    <div id="my-score-display">0 pts</div>
+  </div>
+  <div id="timer-bar" class="timer-bar"></div>
+  <div style="max-width:600px; width:100%; padding:2rem; margin-top:60px;">
+    <p id="q-text" style="font-size:1.6rem; font-weight:bold; text-align:center; margin-bottom:2rem;"></p>
+    <div id="answers-grid"></div>
+  </div>
+</div>
+
+<div id="leaderboard-screen" class="screen">
+  <div class="panel">
+    <h2>Standings</h2>
+    <ul id="lb-list" class="player-list"></ul>
+    <button id="next-btn" class="btn btn-primary" style="display:none;" onclick="nextQuestion()">Next Question</button>
+    <p id="p-wait-next" style="display:none;">Wait for host...</p>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue, update, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+  // Citing configuration from provided Firebase document
+  const firebaseConfig = {
+    apiKey: "AIzaSyDW-UE-a4TMRcfz3E13mLOgBtx6bywwCtE",
+    authDomain: "history-780ec.firebaseapp.com",
+    databaseURL: "https://history-780ec-default-rtdb.firebaseio.com",
+    projectId: "history-780ec",
+    storageBucket: "history-780ec.firebasestorage.app",
+    messagingSenderId: "426243337205",
+    appId: "1:426243337205:web:fc7f097a6fa0497297cebc",
+    measurementId: "G-Q1Z3N3BSVB"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  const BANK = [
+    { q: "Which Commodore forced Japan to open ports in 1853?", a: ["Matthew Perry", "John Jones", "David Farragut", "Winfield Scott"], c: 0 },
+    { q: "What was Darwin's 1859 work on evolution?", a: ["On the Origin of Species", "The Descent of Man", "Geology", "The Voyage"], c: 0 },
+    { q: "Which fort's bombardment began the Civil War?", a: ["Fort Sumter", "Fort McHenry", "Fort Knox", "Fort Lee"], c: 0 },
+    { q: "Who developed the practical light bulb in 1879?", a: ["Thomas Edison", "Nikola Tesla", "Humphry Davy", "Joseph Swan"], c: 0 },
+    { q: "The Statue of Liberty was a gift from which country?", a: ["France", "Great Britain", "Germany", "Italy"], c: 0 },
+    { q: "Who made the first powered flight in 1903?", a: ["Wright Brothers", "Blériot", "Langley", "Curtiss"], c: 0 }
+  ];
+
+  let state = { 
+    isHost: false, 
+    myId: 'p'+Math.random().toString(36).slice(2, 7), 
+    roomCode: '', 
+    currentQIndex: -1, 
+    myScore: 0, 
+    questions: [], 
+    myEmoji: '👤',
+    timeLimit: 15
+  };
+
+  window.showScreen = (id) => { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); };
+
+  window.selectChar = (el, emoji) => {
+    document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    state.myEmoji = emoji;
+  };
+
+  window.createRoom = async () => {
+    const name = document.getElementById('host-name-input').value || 'Host';
+    state.timeLimit = parseInt(document.getElementById('time-limit-input').value) || 15;
+    state.roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    state.isHost = true;
+    const selected = [...BANK].sort(() => Math.random() - 0.5);
+    
+    await set(ref(db, 'rooms/' + state.roomCode), { 
+      status: 'lobby', 
+      currentQ: -1, 
+      questions: selected, 
+      timeLimit: state.timeLimit,
+      players: { [state.myId]: { name, score: 0, emoji: '👑', answered: false } } 
+    });
+    
+    setupSync();
+    document.getElementById('display-room-code').textContent = state.roomCode;
+    document.getElementById('start-btn').style.display = 'block';
+    document.getElementById('wait-msg').style.display = 'none';
+    showScreen('lobby-screen');
+  };
+
+  window.joinRoom = async () => {
+    const code = document.getElementById('join-code-input').value.toUpperCase();
+    const name = document.getElementById('join-name-input').value || 'Player';
+    const snap = await get(ref(db, `rooms/${code}`));
+    if (snap.exists()) {
+      state.roomCode = code;
+      state.timeLimit = snap.val().timeLimit || 15;
+      await update(ref(db, `rooms/${code}/players/${state.myId}`), { name, score: 0, emoji: state.myEmoji, answered: false });
+      setupSync();
+      document.getElementById('display-room-code').textContent = code;
+      showScreen('lobby-screen');
+    } else { alert("Room not found!"); }
+  };
+
+  function setupSync() {
+    onValue(ref(db, 'rooms/' + state.roomCode), (snapshot) => {
+      const room = snapshot.val();
+      if (!room) return;
+      state.questions = room.questions;
+      
+      const sortedPlayers = Object.values(room.players || {}).sort((a, b) => b.score - a.score);
+      const listHtml = sortedPlayers.map(p => `<li><span>${p.emoji} ${p.name}</span> <span>${p.score} pts</span></li>`).join('');
+      document.getElementById('player-list').innerHTML = listHtml;
+      document.getElementById('lb-list').innerHTML = listHtml;
+
+      if (room.status === 'question' && state.currentQIndex !== room.currentQ) {
+        state.currentQIndex = room.currentQ;
+        document.getElementById('wait-overlay').classList.remove('active');
+        renderQuestion();
+      } else if (room.status === 'leaderboard') {
+        document.getElementById('wait-overlay').classList.remove('active');
+        showScreen('leaderboard-screen');
+        if (state.isHost) document.getElementById('next-btn').style.display = 'block';
+        else document.getElementById('p-wait-next').style.display = 'block';
+      }
+
+      // Automatically move to leaderboard if everyone is done
+      if (state.isHost && room.status === 'question') {
+        const allDone = Object.values(room.players).every(p => p.answered);
+        if (allDone) setTimeout(() => update(ref(db, `rooms/${state.roomCode}`), { status: 'leaderboard' }), 1000);
+      }
+    });
+  }
+
+  window.startGame = () => update(ref(db, `rooms/${state.roomCode}`), { status: 'question', currentQ: 0 });
+
+  function renderQuestion() {
+    const qData = state.questions[state.currentQIndex];
+    document.getElementById('q-count-display').innerText = `Q ${state.currentQIndex + 1}/${state.questions.length}`;
+    document.getElementById('q-text').innerText = qData.q;
+    const grid = document.getElementById('answers-grid');
+    grid.innerHTML = '';
+    
+    // Scramble answers for the individual player
+    const shuffled = [...qData.a].map((val, idx) => ({ val, idx })).sort(() => Math.random() - 0.5);
+    
+    shuffled.forEach(item => {
+      const btn = document.createElement('button');
+      btn.className = 'answer-btn';
+      btn.innerText = item.val;
+      btn.onclick = () => {
+        if (item.val === qData.a[qData.c]) state.myScore += 100;
+        document.querySelectorAll('.answer-btn').forEach(b => {
+          b.disabled = true;
+          if(b.innerText === qData.a[qData.c]) b.classList.add('correct');
+          else if(b.innerText === item.val) b.classList.add('wrong');
+        });
+        update(ref(db, `rooms/${state.roomCode}/players/${state.myId}`), { answered: true, score: state.myScore });
+        document.getElementById('my-score-display').innerText = `${state.myScore} pts`;
+        
+        // Kahoot waiting screen
+        setTimeout(() => {
+          if (document.getElementById('game-screen').classList.contains('active')) {
+            document.getElementById('wait-overlay').classList.add('active');
+          }
+        }, 1200);
+      };
+      grid.appendChild(btn);
+    });
+
+    const bar = document.getElementById('timer-bar');
+    bar.style.transition = 'none'; bar.style.width = '100%';
+    setTimeout(() => { 
+      bar.style.transition = `width ${state.timeLimit}s linear`; 
+      bar.style.width = '0%'; 
+    }, 100);
+  }
+
+  window.nextQuestion = async () => {
+    const next = state.currentQIndex + 1;
+    if (next >= state.questions.length) { alert("Session concluded!"); return; }
+    const snap = await get(ref(db, `rooms/${state.roomCode}/players`));
+    const players = snap.val();
+    for (let id in players) players[id].answered = false;
+    update(ref(db, `rooms/${state.roomCode}`), { status: 'question', currentQ: next, players: players });
+  };
+</script>
+</body>
+</html>
